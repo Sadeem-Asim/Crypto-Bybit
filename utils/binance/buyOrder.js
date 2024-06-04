@@ -10,7 +10,7 @@ import createOrderParams from "#utils/binance/createOrderParams";
 import { myLogger } from "#utils/logger";
 import cache from "#utils/common/Cache";
 import { BOT_STATUS } from "#constants/index";
-
+import { RestClientV5 } from "bybit-api";
 const buyOrder = async ({
   symbol,
   investment,
@@ -19,63 +19,58 @@ const buyOrder = async ({
   user_id,
   currentPrice,
 }) => {
-  const { api } = await UserModel.findById(user_id, { "api.binance": 1 });
+  const { api } = await UserModel.findById(user_id, { "api.bybit": 1 });
   const { apiKey, secret } = extractApiKeys(api);
+  console.log("in Buy Order", apiKey, secret);
   // Order Buy Params
-  const params = createOrderParams(
-    {
-      symbol,
-      investment,
+
+  const client = new RestClientV5({
+    enableRateLimit: true,
+    testnet: false,
+    key: apiKey,
+    secret: secret,
+    options: {
+      defaultType: "spot",
+      adjustForTimeDifference: true,
+      verbose: true,
     },
-    secret,
-    false
-  );
+  });
 
   cache.set(_.toString(setting_id), BOT_STATUS.COINS_PURCHASED);
   // Order Buy API
-  await binanceApi
-    .createOrder(params, apiKey)
+  client
+    .submitOrder({
+      category: "spot",
+      symbol: symbol,
+      side: "Buy",
+      orderType: "Market",
+      qty: `${investment}`, //investment
+    })
     // Block Run if Order Successfully Bought
-    .then(async (response) => {
+    .then(async (res) => {
       // Save Response in kucoin log file
+      console.log(res);
+      const orderId = res["result"].orderId;
+      console.log(orderId);
+      const order = await client.getActiveOrders({
+        category: "spot",
+        symbol: symbol,
+        orderId: orderId,
+      });
+      const response = order["result"].list[0];
       myLogger.binance.info(JSON.stringify(response?.data));
-      // Update Bot Setting that Order was Bought
+      // // Update Bot Setting that Order was Bought
       await BotSetting.findByIdAndUpdate(setting_id, {
         $set: {
           hasPurchasedCoins: true,
           raw: {
-            price: Number(response.data.fills[0].price),
-            qty: Number(response?.data?.executedQty),
-            size: Number(response?.data?.cummulativeQuoteQty),
+            price: Number(response?.avgPrice),
+            qty: Number(response?.cumExecQty),
+            size: Number(response?.cumExecValue),
           },
         },
-        $push: { "stats.buy": Number(response?.data?.fills[0]?.price) },
+        $push: { "stats.buy": Number(response?.avgPrice) },
       });
-      //Destructuring Transaction Data
-      const { fills, executedQty, ...restData } = response?.data;
-      const { price, tradeId } = fills[0];
-      const doc = {
-        ...restData,
-        price,
-        qty: executedQty,
-        tradeId,
-        bot: bot_id,
-        user: user_id,
-      };
-
-      /*TODO:: Remove this testing Logger*/
-      myLogger.binanceTesting.error(
-        JSON.stringify({
-          side: "buy",
-          setting_id,
-          price: price,
-          qty: executedQty,
-          size: restData.cummulativeQuoteQty,
-        })
-      );
-
-      // Create the Transaction of Order
-      await new Transaction(doc).save();
       console.log("BOUGHT", symbol, investment, setting_id, bot_id, user_id);
     })
     // Block Run if Order has been failed with some issue

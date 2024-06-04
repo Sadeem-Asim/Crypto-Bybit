@@ -9,6 +9,8 @@ import binanceSDKInstance from "#utils/binance/binanceSDKInstance";
 import getBinanceCoinPrice from "#utils/binance/getBinanceCoinPrice";
 import getBinanceAccountBalance from "#utils/binance/getBinanceAccountBalance";
 import { eventEmitter } from "#sockets/CoinStats";
+import { RestClientV5 } from "bybit-api";
+
 class SocketServer {
   constructor(server, config = {}) {
     const io = new Server(server, config);
@@ -48,8 +50,9 @@ class SocketServer {
       const api = _.get(
         socket,
         "handshake.query.api",
-        '{"binance":{"apiKey":"","secret":""}}'
+        '{"bybit":{"apiKey":"","secret":""}}'
       );
+      // console.log("from socket", api);
 
       /*Binance*/
       const receiveBinanceEvent = `${SOCKET_EVENTS.hit_binance_api}_${userId}`;
@@ -63,16 +66,15 @@ class SocketServer {
 
       console.log(`SOCKET ID: ${socket.id} Connected`);
 
-      const { binance: binanceApiKeys } = [undefined].includes(
+      const { bybit: binanceApiKeys } = [undefined].includes(
         socket?.handshake?.query?.api
       )
         ? {
-            binance: { apiKey: "", secret: "" },
-            ku_coin: { apiKey: "", secret: "", passphrase: "" },
+            bybit: { apiKey: "", secret: "" },
           } // default
         : JSON.parse(api); // apis from socket client
-
-      const isBinanceKeysValid = (binanceApiKeys) => {
+      // console.log(binanceApiKeys);
+      const isBybitKeysValid = (binanceApiKeys) => {
         if (_.isEmpty(binanceApiKeys)) {
           return false;
         } else
@@ -81,16 +83,28 @@ class SocketServer {
           );
       };
 
-      if (isBinanceKeysValid(binanceApiKeys)) {
+      if (isBybitKeysValid(binanceApiKeys)) {
         const { apiKey, secret } = binanceApiKeys;
         /*****************  Binance Socket Events  *****************/
         socket.on(receiveBinanceEvent, async () => {
-          const binance = binanceSDKInstance(binanceApiKeys);
-          const accountBalance = await getBinanceAccountBalance(
-            undefined,
-            binanceApiKeys
-          );
-
+          const client = new RestClientV5({
+            key: apiKey,
+            secret: secret,
+            testnet: false,
+            options: {
+              adjustForTimeDifference: true,
+              verbose: true,
+              defaultType: "spot",
+            },
+          });
+          const data = await client.getWalletBalance({
+            accountType: "UNIFIED",
+            coin: "USDT",
+          });
+          const accountBalance = data.result.list[0].coin[0].walletBalance
+            ? data.result.list[0].coin[0].walletBalance
+            : 0;
+          // console.log(accountBalance);
           try {
             const data = {
               balance: accountBalance,

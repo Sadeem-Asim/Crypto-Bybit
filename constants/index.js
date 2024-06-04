@@ -10,7 +10,7 @@ export const BOT_STATUS = { COINS_PURCHASED: true, COIN_SOLD: false };
 export const INDICATORS = ["RSI", "TRAILING"];
 export const RISKS = ["LOW", "MODERATE", "HIGH"];
 export const STAGES = { LOW: "Q1", MODERATE: "Q2", HIGH: "Q3", DEFAULT: "?" };
-export const EXCHANGES = ["BINANCE", "KUCOIN"];
+export const EXCHANGES = ["BYBIT"];
 export const COINS = ["BTC", "ETH"];
 export const OPERATION = ["MANUAL", "AUTO"];
 
@@ -26,7 +26,7 @@ export const TAAPI_SYMBOLS = ["BTC/USDT", "ETH/USDT"];
 
 export const BINANCE_INTERVAL = [
   "1s",
-  "1m",
+  "1min",
   "3m",
   "5m",
   "15m",

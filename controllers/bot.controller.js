@@ -36,7 +36,7 @@ const createBot = asyncHandlerMiddleware(async (req, res) => {
       return res.status(404).send("User Bot Already Active");
     }
   }
-  if (investment < 10)
+  if (investment < 1)
     return res
       .status(400)
       .send(`investment must be greater than and equal to 10`);

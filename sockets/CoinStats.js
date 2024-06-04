@@ -1,7 +1,7 @@
-import { DefaultLogger, WebsocketClient } from "binance";
+// import { DefaultLogger, WebsocketClient } from "binance";
 import EventEmitter from "events";
 import Binance from "node-binance-api";
-
+import { DefaultLogger, WebsocketClient } from "bybit-api";
 export const eventEmitter = new EventEmitter();
 
 export function CoinStats() {
@@ -24,11 +24,7 @@ export function CoinStats() {
     {
       api_key: API_KEY,
       api_secret: API_SECRET,
-      beautify: true,
-      // wsUrl: "wss://stream.binance.us:9443",
-      weUrl: "wss://ws-api.binance.com:443/ws-api/v3",
-      // Disable ping/pong ws heartbeat mechanism (not recommended)
-      // disableHeartbeat: true
+      market: "v5",
     },
     logger
   );
@@ -42,56 +38,43 @@ export function CoinStats() {
 
   // notification when a connection is opened
   wsClient.on("open", (data) => {
-    console.log("connection opened open:", data.wsKey, data.ws.target.url);
+    console.log("connection opened open:");
   });
 
-  // receive formatted events with beautified keys. Any "known" floats stored in strings as parsed as floats.
-  wsClient.on("formattedMessage", (data) => {
-    const key = data?.symbol === "BTCUSDT" ? "BTC" : "ETH";
-    const isPriceEvent = data?.eventType === "trade";
-    // console.log("Hello");
-    if (isPriceEvent) {
-      statistics[key]["price"] = data["price"];
+  wsClient.on("update", (res) => {
+    // console.log(res);
+    if (res.wsKey === "v5LinearPublic") {
+      // console.log("Linear", res.topic);
+      const key = res?.topic === "kline.1.BTCUSDT" ? "BTC" : "ETH";
+
+      const stats = {
+        symbol: key,
+        futurePrice: res.data[0].close,
+      };
+      // console.log(stats);
+      eventEmitter.emit("stats", stats);
     } else {
-      const { priceChange, close, high, low } = data;
+      const key = res?.topic === "kline.1.BTCUSDT" ? "BTC" : "ETH";
+      statistics[key]["price"] = res.data[0].close;
+      const { open, high, low } = res.data[0];
       statistics[key] = {
         ...statistics[key],
-        change: priceChange,
-        close,
+        open,
         high,
         low,
       };
+      eventEmitter.emit("stats", statistics);
     }
-    // console.log(statistics);
-
-    eventEmitter.emit("stats", statistics);
-    // console.log(statistics);
   });
+  wsClient.on("response", (response) => {});
 
-  // read response to command sent via WS stream (e.g LIST_SUBSCRIPTIONS)
-  wsClient.on("reply", (data) => {
-    console.log("log reply: ", JSON.stringify(data, null, 2));
-  });
-
-  // receive notification when a ws connection is reconnecting automatically
-  wsClient.on("reconnecting", (data) => {
-    // console.log('ws automatically reconnecting.... ', data?.wsKey);
-  });
-
-  // receive notification that a reconnection completed successfully (e.g use REST to check for missing data)
-  wsClient.on("reconnected", (data) => {
-    console.log("ws has reconnected ", data?.wsKey);
-  });
-
-  // Recommended: receive error events (e.g. first reconnection failed)
   wsClient.on("error", (data) => {
     console.log("ws saw error ", data?.wsKey);
   });
-
-  wsClient.subscribeSpotSymbol24hrTicker("BTCUSDT");
-  wsClient.subscribeSpotSymbol24hrTicker("ETHUSDT");
-  wsClient.subscribeSpotTrades("BTCUSDT");
-  wsClient.subscribeSpotTrades("ETHUSDT");
+  wsClient.subscribeV5("kline.1.BTCUSDT", "spot");
+  wsClient.subscribeV5("kline.1.ETHUSDT", "spot");
+  wsClient.subscribeV5("kline.1.BTCUSDT", "linear");
+  wsClient.subscribeV5("kline.1.ETHUSDT", "linear");
 }
 
 export function FutureCoinStats() {

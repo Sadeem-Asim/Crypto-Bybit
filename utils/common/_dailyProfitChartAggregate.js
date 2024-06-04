@@ -8,8 +8,13 @@ export default async function _dailyProfitChartAggregate(
   filter = {}
 ) {
   const risk = _RISK[days];
+  let $match;
+  if (days !== 7) {
+    $match = { ...filter, risk };
+  } else {
+    $match = { ...filter };
+  }
 
-  const $match = { ...filter, risk };
   return Profit.aggregate([
     { $match },
     {

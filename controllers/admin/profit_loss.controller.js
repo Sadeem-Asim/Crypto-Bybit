@@ -1,5 +1,6 @@
 import asyncHandlerMiddleware from "#middlewares/asyncHandler.middleware";
 import { Bot } from "#models/bot.model";
+import { BotSetting } from "#models/bot_setting.model";
 import isWithinDays from "#utils/common/isWIthinDays";
 import _ from "lodash";
 import assignProfit from "#utils/common/assignProfit";
@@ -17,7 +18,9 @@ import getWinrate from "#utils/profit_loss/getWinrate";
 import getProfitDistribution from "#utils/profit_loss/getProfitDistribution";
 import getBills from "#utils/profit_loss/getBills";
 import profitLoss from "#utils/aggregates/profitLoss";
+import getCumulativeProfits from "#utils/common/getCumulativeProfit";
 import { LeverageHistory } from "#models/leverageHistoryModel";
+import { Profit } from "#models/ProfitModel";
 
 const getUsersPortfolio = asyncHandlerMiddleware(async (req, res) => {
   const bots = await Bot.find().populate("user", [
@@ -34,12 +37,12 @@ const getUsersPortfolio = asyncHandlerMiddleware(async (req, res) => {
  @access   Private
  */
 const getProfitLossDashboard = asyncHandlerMiddleware(async (req, res) => {
-  const filter = { exchange: EXCHANGES[0] };
+  const filter = {};
   const exchange = req?.query?.exchange;
   const leverages = await LeverageHistory.find({});
   let leverageProfit = leverages.reduce(calculateTotalProfit, 0);
 
-  if (exchange) filter["exchange"] = _.toUpper(exchange);
+  // if (exchange) filter["exchange"] = _.toUpper(exchange);
 
   const bots = await Bot.find(filter);
   const runningBots = await Bot.countDocuments({ ...filter, isActive: true });
@@ -48,48 +51,47 @@ const getProfitLossDashboard = asyncHandlerMiddleware(async (req, res) => {
   const winrateData = getWinrate(_bots, leverages); //NOTE::Winrate
   console.log(winrateData);
   //  NOTE::  Profit Distribution && Asset Allocation Calculation
-  const { profitDistributionData, assetAllocationData } =
-    getProfitDistribution(_bots); // TODO:: May be pass bots
+  // const { profitDistributionData, assetAllocationData } =
+  //   getProfitDistribution(_bots); // TODO:: May be pass bots
 
   const totalProfitPrice = _bots.reduce(calculateTotalProfit, 0); //NOTE::Total Profit Price
   const totalRunningAssets = _bots.reduce(calculateTotalRunningAssets, 0); //NOTE::Total Running Assets
-  const { billsData } = await getBills(); //NOTE:: Bills Stats
+  // const { billsData } = await getBills(); //NOTE:: Bills Stats
 
   /*******    NOTE::      TOTAL PROFIT CHART      *********/
+  // let cumulativeProfitsArray = await getCumulativeProfits();
+  // const week = await _totalProfitChartAggregate(7, filter); //NOTE:: Week Chart Data
+  // const fortnight = await _totalProfitChartAggregate(15, filter); //NOTE:: Fortnight Chart Data
+  // const month = await _totalProfitChartAggregate(30, filter); //NOTE::One Month Calculation
 
-  const week = await _totalProfitChartAggregate(7, filter); //NOTE:: Week Chart Data
-  const fortnight = await _totalProfitChartAggregate(15, filter); //NOTE:: Fortnight Chart Data
-  const month = await _totalProfitChartAggregate(30, filter); //NOTE::One Month Calculation
-
-  const weekTotalPrice = week.reduce(calculateTotalProfit, 0);
-  const fortnightTotalPrice = fortnight.reduce(calculateTotalProfit, 0);
-  const monthTotalPrice = month.reduce(calculateTotalProfit, 0);
-
+  // const weekTotalPrice = week.reduce(calculateTotalProfit, 0);
+  // const fortnightTotalPrice = fortnight.reduce(calculateTotalProfit, 0);
+  // const monthTotalPrice = month.reduce(calculateTotalProfit, 0);
+  const openPositions = await getOpenPositions();
+  // console.log(openPositions);
   /*******    NOTE::      Daily PROFIT CHART      *********/
 
   const _week = await _dailyProfitChartAggregate(7, filter); //  NOTE::Week Calculation
   const _fortnight = await _dailyProfitChartAggregate(15, filter); //  NOTE::Fortnight Calculation
   const _month = await _dailyProfitChartAggregate(30, filter); //   NOTE::One Month Calculation
-
+  // console.log(_week);
+  let globalAmount = 0;
+  let cumulativeProfitsArray = _week.map((doc) => {
+    globalAmount += doc.profit;
+    return Object.assign({ x: doc.startDate, y: globalAmount });
+  });
+  // console.log(cumulativeProfitsArray);
   const _weekTotalPrice = _week.reduce(calculateTotalProfit, 0);
   const _fortnightTotalPrice = _fortnight.reduce(calculateTotalProfit, 0);
   const _monthTotalPrice = _month.reduce(calculateTotalProfit, 0);
   const todayProfitPrice = await todayProfit(filter);
-
+  // console.log(_week, _weekTotalPrice);
+  console.log(todayProfitPrice);
   const data = {
     runningAssets: totalRunningAssets,
     todayProfitPrice: _.round(todayProfitPrice, 3),
     totalProfitPrice: _.round(totalProfitPrice + leverageProfit, 3),
-    totalProfitChart: {
-      7: round3Precision(weekTotalPrice),
-      15: round3Precision(fortnightTotalPrice),
-      30: round3Precision(monthTotalPrice),
-    },
-    totalProfit: {
-      7: week,
-      15: fortnight,
-      30: month,
-    },
+
     dailyProfitChart: {
       7: round3Precision(_weekTotalPrice),
       15: round3Precision(_fortnightTotalPrice),
@@ -100,11 +102,29 @@ const getProfitLossDashboard = asyncHandlerMiddleware(async (req, res) => {
       15: _fortnight,
       30: _month,
     },
-    profitDistribution: profitDistributionData,
     winrate: winrateData,
-    assetAllocation: assetAllocationData,
-    botProfit: billsData,
     totalRunningBots: runningBots,
+    openPositions: openPositions,
+    lineChart: [
+      {
+        id: "Total Profit",
+        color: "#247962",
+        data: cumulativeProfitsArray,
+      },
+    ],
+    // profitDistribution: profitDistributionData,
+    // assetAllocation: assetAllocationData,
+    // botProfit: billsData,
+    // totalProfitChart: {
+    //   7: round3Precision(weekTotalPrice),
+    //   15: round3Precision(fortnightTotalPrice),
+    //   30: round3Precision(monthTotalPrice),
+    // },
+    // totalProfit: {
+    //   7: week,
+    //   15: fortnight,
+    //   30: month,
+    // },
   };
 
   res.status(200).send(data);
@@ -174,4 +194,42 @@ export {
   getProfitLossDashboard,
   getProfitLossStatistics,
   getProfitLoss,
+};
+
+const getOpenPositions = async () => {
+  let openPositions = [];
+  const openLeverages = await LeverageHistory.find({
+    active: true,
+    hasPurchasedCoins: true,
+  }).populate("user", ["name"]);
+  const openSpots = await BotSetting.find({
+    hasPurchasedCoins: true,
+    isActive: true,
+  }).populate("user", ["name"]);
+  // console.log(openLeverages);
+  // console.log(openSpots);
+  for (let leverage of openLeverages) {
+    let obj = {
+      txId: "Future",
+      user: leverage.user.name,
+      date: leverage.type,
+      cost: leverage.balance,
+    };
+    openPositions.push(obj);
+  }
+
+  for (let openSpot of openSpots) {
+    let obj = {
+      txId: "Spot",
+      user: openSpot.user.name,
+      date:
+        openSpot.operation === "MANUAL"
+          ? openSpot.operation
+          : openSpot.indicator,
+      cost: openSpot.raw.size,
+    };
+    openPositions.push(obj);
+  }
+  // console.log(openPositions);
+  return openPositions;
 };

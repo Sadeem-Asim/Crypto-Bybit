@@ -15,6 +15,30 @@ import binanceEthSockets from "#sockets/binanceEthLib";
 // import deleteProfit from "./deleteProfits.js";
 import { CoinStats, FutureCoinStats } from "#sockets/CoinStats";
 import { SOCKET_ORIGINS } from "#constants/index";
+// import { RestClientV5 } from "bybit-api";
+// const API_KEY = "D7vaGJEMzIuJjpvZ9n";
+// const API_SECRET = "IhTgYAuNI40PHI128tjqti8timenEGE7cJr4";
+// const useTestnet = false;
+
+// const client = new RestClientV5({
+//   key: API_KEY,
+//   secret: API_SECRET,
+//   testnet: useTestnet,
+//   options: {
+//     adjustForTimeDifference: true,
+//     verbose: true,
+//     defaultType: "spot",
+//   },
+// });
+// client
+//   .getWalletBalance({ accountType: "UNIFIED", coin: "USDT" })
+//   .then((data) => {
+//     const { walletBalance } = data.result.list[0].coin[0];
+//     // console.log("getAccountInfo data: ", walletBalance);
+//   })
+//   .catch((err) => {
+//     console.error("getAccountInfo error: ", err);
+//   });
 
 envConfig();
 connectDB();
@@ -24,11 +48,11 @@ logger();
 // })();
 // deleteProfit();
 const app = express();
-binanceBtcSockets();
-binanceEthSockets();
+// binanceBtcSockets();
+// binanceEthSockets();
 CoinStats();
-FutureCoinStats();
-const PORT = process.env.PORT || 5000;
+// FutureCoinStats();
+const PORT = 5001;
 
 /*****  Middlewares  *****/
 app.use(cors({ origin: true, credentials: true }));

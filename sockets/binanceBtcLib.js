@@ -10,21 +10,14 @@ import leverageMarketOpen from "#utils/binance/leverageMarketOpen";
 import _ from "lodash";
 import inRange from "#utils/common/inRange";
 import { BotSetting } from "#models/bot_setting.model";
-import { DefaultLogger, WebsocketClient } from "binance";
-import { LeverageHistory } from "#models/leverageHistoryModel";
-import Binance from "node-binance-api";
+// import { DefaultLogger, WebsocketClient } from "binance";
+import { DefaultLogger, WebsocketClient } from "bybit-api";
 
+import { LeverageHistory } from "#models/leverageHistoryModel";
+global.a = 0;
 export default function binanceLib() {
-  const binance = new Binance().options({
-    APIKEY: "<key>",
-    APISECRET: "<secret>",
-  });
-  binance.futuresMarkPriceStream("BTCUSDT", async (data) => {
-    // console.log(data.markPrice);
-    const { markPrice } = data;
-    // console.log(markPrice);
-    await leverage({ markPrice });
-  });
+  const API_KEY = "xxx";
+  const API_SECRET = "yyy";
   const logger = {
     ...DefaultLogger,
     silly: (...params) => {
@@ -33,27 +26,25 @@ export default function binanceLib() {
   };
   const wsClient = new WebsocketClient(
     {
-      beautify: true,
-      // wsUrl: "wss://ws-api.binance.com:443/ws-api/v3",
-      // Disable ping/pong ws heartbeat mechanism (not recommended)
-      // disableHeartbeat: true
+      api_key: API_KEY,
+      api_secret: API_SECRET,
+      market: "v5",
     },
     logger
   );
-
-  wsClient.on("formattedMessage", async (data) => {
-    // console.log(data);
-    const { symbol, kline } = data;
-    const { close } = kline;
-    // console.log(symbol);
+  wsClient.on("open", (data) => {
+    console.log("Binance Library connection opened:");
+  });
+  wsClient.on("update", async (res) => {
+    const coin = res?.topic === "kline.1.BTCUSDT" ? "BTC" : "ETH";
+    const symbol = res?.topic === "kline.1.BTCUSDT" ? "BTCUSDT" : "ETHUSDT";
+    const { close } = res.data[0];
     const currentPrice = _.round(close);
-    const coin = symbol === "BTCUSDT" ? "BTC" : "ETH";
-
-    // console.log({currentPrice, coin,symbol})
     await cb({ currentPrice, coin, symbol });
   });
-  // wsClient.subscribeTrades();
-  wsClient.subscribeSpotKline("BTCUSDT", "1s");
+
+  wsClient.subscribeV5("kline.1.BTCUSDT", "spot");
+
   // wsClient.subscribeSpotKline("ETHUSDT", "1s");
 }
 const leverage = _.debounce(
@@ -70,10 +61,10 @@ const leverage = _.debounce(
     if (limitOrders.length > 0) {
       limitOrders.forEach(async (order) => {
         let buyCondition = false;
-        if (order.side === "BUY") {
+        if (order.side === "Buy") {
           buyCondition = inRange(markPrice, order.price - 3, order.price);
           // sellCondition = markPrice >= order.takeProfit;
-        } else if (order.side === "SELL") {
+        } else if (order.side === "Sell") {
           // buyCondition = markPrice <= order.price;
           buyCondition = inRange(markPrice, order.price + 3, order.price);
           // sellCondition = markPrice <= order.takeProfit;
@@ -104,14 +95,14 @@ const leverage = _.debounce(
     if (leverages.length > 0) {
       leverages.forEach(async (leverage) => {
         let sellCondition = false;
-        if (leverage.side === "BUY") {
+        if (leverage.side === "Buy") {
           sellCondition = inRange(
             markPrice,
             leverage.takeProfit + 5,
             leverage.takeProfit
           );
           // sellCondition = markPrice >= leverage.takeProfit;
-        } else if (leverage.side === "SELL") {
+        } else if (leverage.side === "Sell") {
           sellCondition = inRange(
             markPrice,
             leverage.takeProfit - 5,
@@ -185,6 +176,7 @@ const cb = _.debounce(
                 time,
                 raw,
               } = setting;
+              global.a = global.a + 1;
 
               const stopCondition = currentPrice <= stop_at;
               // console.log(stopCondition, stop_at);
@@ -330,8 +322,6 @@ const cb = _.debounce(
                 const min = symbol === "ETHUSDT" ? low - 2 : low - 5;
                 const max = symbol === "ETHUSDT" ? low : low;
                 const buyCondition = inRange(currentPrice, min, max);
-                // const buyCondition = low === currentPrice;
-                // console.log(buyCondition);
                 if (hasPurchasedCoins) {
                   const takePriceCondition =
                     currentPrice === takeProfit && takeProfit !== 0;

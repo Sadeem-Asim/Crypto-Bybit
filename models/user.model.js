@@ -33,7 +33,7 @@ const userSchema = new mongoose.Schema(
     api: {
       type: Schema.Types.Mixed,
       default: {
-        binance: {
+        bybit: {
           apiKey: "",
           secret: "",
         },

@@ -133,7 +133,11 @@ adminRouter.delete(
 );
 
 /*NOTE:: Export Data Routes*/
-adminRouter.get("/export/bot", [authMiddleware, admin], exportBotData);
+adminRouter.get(
+  "/export/bot/:startDate/:endDate/:id",
+  [authMiddleware, admin],
+  exportBotData
+);
 
 adminRouter.get("/activity", authMiddleware, botsActivity);
 

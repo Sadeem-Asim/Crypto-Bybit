@@ -6,9 +6,7 @@ import { UserModel } from "#models/user.model";
 import { subAdminUsers } from "#models/sub_admin_users";
 import assignProfit from "#utils/common/assignProfit";
 import extractApiKeys from "#utils/common/extractApiKeys";
-import getBinanceParams from "#utils/binance/getBinanceParams";
-import binanceApi from "#services/binance";
-import Binance from "node-binance-api";
+import { RestClientV5 } from "bybit-api";
 
 import _ from "lodash";
 // import kuCoinApi from "#services/kucoin";
@@ -86,42 +84,28 @@ const botsActivity = asyncHandlerMiddleware(async (req, res) => {
       try {
         const { apiKey, secret } = extractApiKeys(user?.api);
         // console.log(user?.name);
+        console.log(apiKey, secret);
         // Binance Api Kets
         if (apiKey || secret) {
-          const params = getBinanceParams(undefined, secret);
-          const { data, status } = await binanceApi.accountInformation(
-            params,
-            apiKey
-          );
-          //   console.log(data.balances);
-          for (let balance of data?.balances) {
-            switch (balance?.asset) {
-              case "USDT":
-                balances["usdt"] = _.round(balance?.free, 2);
-                break;
-              default:
-            }
-            if (Object?.keys(balances)?.length === 1) break;
-          }
-          //   console.log(apiKey, secret);
-          // console.log(balances);
-          const binance = new Binance().options({
-            APIKEY: apiKey,
-            APISECRET: secret,
-            family: 4,
+          const client = new RestClientV5({
+            key: apiKey,
+            secret: secret,
+            testnet: false,
+            options: {
+              adjustForTimeDifference: true,
+              verbose: true,
+              defaultType: "spot",
+            },
           });
-
-          const futureBalance = await binance.futuresBalance();
-          for (let element of futureBalance) {
-            // console.log(element);
-            switch (element?.asset) {
-              case "USDT":
-                futureBalances["f_usdt"] = _.round(element?.balance, 2);
-                break;
-              default:
-            }
-            if (Object?.keys(futureBalances)?.length === 1) break;
-          }
+          const data = await client.getWalletBalance({
+            accountType: "UNIFIED",
+            coin: "USDT",
+          });
+          const accountBalance = data.result.list[0].coin[0].walletBalance
+            ? data.result.list[0].coin[0].walletBalance
+            : 0;
+          balances["usdt"] = _.round(accountBalance, 2);
+          futureBalances["f_usdt"] = _.round(0, 2);
           // console.log(futureBalances);
         } else {
           throw new Error("Invalid api key provided");
@@ -133,50 +117,6 @@ const botsActivity = asyncHandlerMiddleware(async (req, res) => {
         balances["btc"] = 0;
         balances["eth"] = 0;
       }
-
-      // try {
-      //     const credentials = extractApiKeys(user?.api, 'kucoinApi');
-
-      //     if (
-      //         !credentials['apiKey'] ||
-      //         !credentials['secret'] ||
-      //         !credentials['passphrase']
-      //     ) {
-      //         throw new Error('Invalid api keys provided')
-      //     }
-
-      //     const response = await kuCoinApi.accountInformation({
-      //         type: 'trade',
-      //     }, credentials);
-
-      //     if (response?.code !== '200000')
-      //         throw new Error('Error in kucoin api')
-
-      //     // console.log(Object.values(response.data))
-
-      //     for (const record of response.data) {
-      //         switch (record['currency']) {
-      //             case 'BTC':
-      //                 kucoinBalances['k_btc'] = _.round(record['available'], 2);
-      //                 break;
-      //             case 'ETH':
-      //                 kucoinBalances['k_eth'] = _.round(record['available'], 2);
-      //                 break;
-      //             case 'USDT':
-      //                 kucoinBalances['k_usdt'] = _.round(record['available'], 2);
-      //                 break;
-      //             default:
-      //         }
-      //         if (Object?.keys(kucoinBalances)?.length === 3)
-      //             break;
-      //     }
-      // } catch (e) {
-      //     const error = e.response?.data || e;
-      //     // console.log( { error } );
-      //     kucoinBalances['k_usdt'] = 0;
-      //     kucoinBalances['k_btc'] = 0;
-      //     kucoinBalances['k_eth'] = 0;
-      // }
 
       return { ...user, ...futureBalances, ...balances, bots: _bots };
     })

@@ -16,7 +16,7 @@ import getWinrate from "#utils/profit_loss/getWinrate";
 import getProfitDistribution from "#utils/profit_loss/getProfitDistribution";
 import getBills from "#utils/profit_loss/getBills";
 import mongoose from "mongoose";
-
+import getCumulativeProfits from "#utils/common/getCumulativeProfit";
 /**
  @desc     Profit Loss Account
  @route    GET /api/profit_loss/account
@@ -73,27 +73,22 @@ const getProfitLossAccountDetails = asyncHandlerMiddleware(async (req, res) => {
   const winrateData = getWinrate(_bots, leverages); //NOTE::Winrate
 
   //  NOTE::  Profit Distribution Calculation
-  const { profitDistributionData } = getProfitDistribution(bots, currency);
-
+  // let cumulativeProfitsArray = await getCumulativeProfits({ coin: currency });
   //  NOTE::  Total Profit Price Calculation
   let totalProfitPrice = _bots.reduce(calculateTotalProfit, 0);
   totalProfitPrice = totalProfitPrice + leverageProfit;
   const totalRunningAssets = _bots.reduce(calculateTotalRunningAssets, 0);
 
-  /*******    NOTE::      TOTAL PROFIT CHART      *********/
-  const week = await _totalProfitChartAggregate(7, filter); //NOTE:: Week Chart Data
-  const fortnight = await _totalProfitChartAggregate(15, filter); //NOTE:: Fortnight Chart Data
-  const month = await _totalProfitChartAggregate(30, filter); //NOTE::One Month Calculation
-
-  const weekTotalPrice = week.reduce(calculateTotalProfit, 0);
-  const fortnightTotalPrice = fortnight.reduce(calculateTotalProfit, 0);
-  const monthTotalPrice = month.reduce(calculateTotalProfit, 0);
-
   /*******    NOTE::      Daily PROFIT CHART      *********/
   const _week = await _dailyProfitChartAggregate(7, filter); //  NOTE::Week Calculation
   const _fortnight = await _dailyProfitChartAggregate(15, filter); //  NOTE::Fortnight Calculation
   const _month = await _dailyProfitChartAggregate(7, filter); //   NOTE::One Month Calculation
-
+  // console.log(_week);
+  let globalAmount = 0;
+  let cumulativeProfitsArray = _week.map((doc) => {
+    globalAmount += doc.profit;
+    return Object.assign({ x: doc.startDate, y: globalAmount });
+  });
   const _weekTotalPrice = _week.reduce(calculateTotalProfit, 0);
   const _fortnightTotalPrice = _fortnight.reduce(calculateTotalProfit, 0);
   const _monthTotalPrice = _month.reduce(calculateTotalProfit, 0);
@@ -104,16 +99,6 @@ const getProfitLossAccountDetails = asyncHandlerMiddleware(async (req, res) => {
     runningAssets: totalRunningAssets,
     todayProfitPrice: _.round(todayProfitPrice, 3),
     totalProfitPrice: _.round(totalProfitPrice, 3),
-    totalProfitChart: {
-      7: round3Precision(weekTotalPrice),
-      15: round3Precision(fortnightTotalPrice),
-      30: round3Precision(monthTotalPrice),
-    },
-    totalProfit: {
-      7: week,
-      14: fortnight,
-      30: month,
-    },
     dailyProfitChart: {
       7: round3Precision(_weekTotalPrice),
       15: round3Precision(_fortnightTotalPrice),
@@ -124,8 +109,14 @@ const getProfitLossAccountDetails = asyncHandlerMiddleware(async (req, res) => {
       14: _fortnight,
       30: _month,
     },
-    profitDistribution: profitDistributionData,
     winrate: winrateData,
+    lineChart: [
+      {
+        id: "Total Profit",
+        color: "#247962",
+        data: cumulativeProfitsArray,
+      },
+    ],
   };
 
   res.status(200).send(data);
@@ -176,27 +167,22 @@ const getProfitLossAccountDetailsByUser = asyncHandlerMiddleware(
     const winrateData = getWinrate(_bots, leverages); //NOTE::Winrate
 
     //  NOTE::  Profit Distribution Calculation
-    const { profitDistributionData } = getProfitDistribution(bots, currency);
+    // const { profitDistributionData } = getProfitDistribution(bots, currency);
 
     //  NOTE::  Total Profit Price Calculation
     let totalProfitPrice = _bots.reduce(calculateTotalProfit, 0);
     totalProfitPrice = totalProfitPrice + leverageProfit;
     const totalRunningAssets = _bots.reduce(calculateTotalRunningAssets, 0);
 
-    /*******    NOTE::      TOTAL PROFIT CHART      *********/
-    const week = await _totalProfitChartAggregate(7, filter); //NOTE:: Week Chart Data
-    const fortnight = await _totalProfitChartAggregate(15, filter); //NOTE:: Fortnight Chart Data
-    const month = await _totalProfitChartAggregate(30, filter); //NOTE::One Month Calculation
-
-    const weekTotalPrice = week.reduce(calculateTotalProfit, 0);
-    const fortnightTotalPrice = fortnight.reduce(calculateTotalProfit, 0);
-    const monthTotalPrice = month.reduce(calculateTotalProfit, 0);
-
     /*******    NOTE::      Daily PROFIT CHART      *********/
     const _week = await _dailyProfitChartAggregate(7, filter); //  NOTE::Week Calculation
     const _fortnight = await _dailyProfitChartAggregate(15, filter); //  NOTE::Fortnight Calculation
     const _month = await _dailyProfitChartAggregate(7, filter); //   NOTE::One Month Calculation
-
+    let globalAmount = 0;
+    let cumulativeProfitsArray = _week.map((doc) => {
+      globalAmount += doc.profit;
+      return Object.assign({ x: doc.startDate, y: globalAmount });
+    });
     const _weekTotalPrice = _week.reduce(calculateTotalProfit, 0);
     const _fortnightTotalPrice = _fortnight.reduce(calculateTotalProfit, 0);
     const _monthTotalPrice = _month.reduce(calculateTotalProfit, 0);
@@ -207,16 +193,7 @@ const getProfitLossAccountDetailsByUser = asyncHandlerMiddleware(
       runningAssets: totalRunningAssets,
       todayProfitPrice: _.round(todayProfitPrice, 3),
       totalProfitPrice: _.round(totalProfitPrice, 3),
-      totalProfitChart: {
-        7: round3Precision(weekTotalPrice),
-        15: round3Precision(fortnightTotalPrice),
-        30: round3Precision(monthTotalPrice),
-      },
-      totalProfit: {
-        7: week,
-        14: fortnight,
-        30: month,
-      },
+
       dailyProfitChart: {
         7: round3Precision(_weekTotalPrice),
         15: round3Precision(_fortnightTotalPrice),
@@ -227,8 +204,14 @@ const getProfitLossAccountDetailsByUser = asyncHandlerMiddleware(
         14: _fortnight,
         30: _month,
       },
-      profitDistribution: profitDistributionData,
       winrate: winrateData,
+      lineChart: [
+        {
+          id: "Total Profit",
+          color: "#247962",
+          data: cumulativeProfitsArray,
+        },
+      ],
     };
 
     res.status(200).send(data);

@@ -12,43 +12,55 @@ import createOrderParams from "#utils/binance/createOrderParams";
 import { Profit } from "#models/ProfitModel";
 import { BOT_STATUS, EXCHANGES } from "#constants/index";
 import cache from "#utils/common/Cache";
+import { RestClientV5 } from "bybit-api";
 
 const sellOrder = async (
   { symbol, quantity, bot_id, user_id, setting_id, currentPrice },
   { raw, investment, risk = "LOW", isManual = false }
 ) => {
-  const { api } = await UserModel.findById(user_id, { "api.binance": 1 });
+  const { api } = await UserModel.findById(user_id, { "api.bybit": 1 });
   const { apiKey, secret } = extractApiKeys(api);
   // Order Sell Params
-  const params = createOrderParams(
-    {
-      symbol,
-      quantity,
+  console.log("in Sell Order", apiKey, secret);
+  const client = new RestClientV5({
+    enableRateLimit: true,
+    testnet: false,
+    key: apiKey,
+    secret: secret,
+    options: {
+      defaultType: "spot",
+      adjustForTimeDifference: true,
+      verbose: true,
     },
-    secret,
-    true
-  );
+  });
 
   cache.set(_.toString(setting_id), BOT_STATUS.COIN_SOLD);
 
   // Order Sell API
-  await binanceApi
-    .createOrder(params, apiKey)
+  client
+    .submitOrder({
+      category: "spot",
+      symbol: "BTCUSDT",
+      side: "Sell",
+      orderType: "Market",
+      qty: `${quantity}`, //investment
+    })
     // Block Run if Order Successfully Sold
-    .then(async (response) => {
-      // Save Response in kucoin log file
-      myLogger.binance.info(JSON.stringify(response?.data));
+    .then(async (res) => {
+      // Save res in kucoin log file
+      myLogger.binance.info(JSON.stringify(res));
       //Destructuring Transaction Data
-      const { fills, cummulativeQuoteQty: size, ...restData } = response?.data;
-      const { price, tradeId } = fills[0];
-      const doc = {
-        ...restData,
-        price,
-        size,
-        tradeId,
-        bot: bot_id,
-        user: user_id,
-      };
+      console.log(res);
+      const orderId = res["result"].orderId;
+      console.log(orderId);
+      const order = await client.getActiveOrders({
+        category: "spot",
+        symbol: symbol,
+        orderId: orderId,
+      });
+      console.log(order);
+      const response = order["result"].list[0];
+      const { avgPrice: price, cumExecQty, cumExecValue: size } = response;
 
       const profit = _.round(Number(size), 3) - _.round(raw.size, 3);
       const availableBalance = Number(investment) + Number(profit);
@@ -91,20 +103,8 @@ const sellOrder = async (
       }
 
       /*TODO:: Remove this testing Logger*/
-      myLogger.binanceTesting.error(
-        JSON.stringify({
-          side: "sell",
-          setting_id,
-          price: price,
-          size: restData.cummulativeQuoteQty,
-          profit,
-          investment,
-          oldQty: raw.size,
-          availableBalance,
-        })
-      );
       // Create the Transaction of Order
-      await new Transaction({ ...doc, setting_id }).save();
+      // await new Transaction({ ...doc, setting_id }).save();
       await handleBotStatus(bot_id);
       console.log("SOLD");
     })

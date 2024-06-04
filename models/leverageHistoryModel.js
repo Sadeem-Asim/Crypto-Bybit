@@ -13,7 +13,7 @@ const LeverageHistorySchema = new mongoose.Schema(
     },
     side: {
       type: String,
-      enum: ["BUY", "SELL"],
+      enum: ["Buy", "Sell"],
     },
     balance: { type: Number },
     type: {

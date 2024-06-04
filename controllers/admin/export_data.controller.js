@@ -8,6 +8,7 @@ import getWinrate from "#utils/profit_loss/getWinrate";
 
 import { calculateTotalProfit } from "#utils/common/calculations";
 import XLSX from "xlsx";
+// import User from "kucoin-node-api/lib/user";
 /**
  @desc     Export Bot Data
  @route    GET /api/admin/export/bot
@@ -71,11 +72,29 @@ const calculateTotalPositionsSpot = async (bots) => {
   } else return 0;
 };
 
-const returnUserData = async (user) => {
+const returnUserData = async (user, startDate, endDate) => {
+  const query = {};
+  console.log(startDate, endDate, user.name);
+
   const userBot = await Bot.findOne({ role: "User", user: user._id });
   // console.log(userBot);
-  let startDate = new Date(userBot.createdAt);
-  let endDate = new Date(Date.now());
+  if (!userBot) {
+    return [0, 0, user.name, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  }
+  if (startDate != user.name) {
+    startDate = new Date(startDate);
+    endDate = new Date(endDate);
+    endDate.setDate(endDate.getDate() + 1);
+  } else {
+    startDate = new Date(userBot.createdAt);
+    endDate = new Date(Date.now());
+  }
+  if (startDate != user.name) {
+    query["createdAt"] = { $gte: new Date(startDate), $lte: new Date(endDate) };
+  } else {
+    query["createdAt"] = 1;
+  }
+  // console.log(query);
   const timeDifferenceMs = endDate - startDate;
   const daysDifference = timeDifferenceMs / (1000 * 60 * 60 * 24);
   startDate = startDate.toDateString();
@@ -85,9 +104,10 @@ const returnUserData = async (user) => {
   let leveragesETH = await LeverageHistory.find({
     user: user._id,
     coin: "ETHUSDT",
+    created_at: query.createdAt,
   });
   let leverageProfitETH = leveragesETH.reduce(calculateTotalProfit, 0);
-  const botsETH = await Bot.find({ user: user._id, coin: "ETH" });
+  const botsETH = await Bot.find({ user: user._id, coin: "ETH", ...query });
   const _botsETH = await assignProfit(botsETH);
   let botsProfitETH = _botsETH.reduce(calculateTotalProfit, 0);
   let totalProfitETH = botsProfitETH + leverageProfitETH;
@@ -96,9 +116,16 @@ const returnUserData = async (user) => {
   let leveragesBTC = await LeverageHistory.find({
     user: user._id,
     coin: "BTCUSDT",
+    created_at: query.createdAt,
   });
   let leverageProfitBTC = leveragesBTC.reduce(calculateTotalProfit, 0);
-  const botsBTC = await Bot.find({ user: user._id, coin: "BTC" });
+  // console.log(query);
+  const botsBTC = await Bot.find({
+    user: user._id,
+    coin: "BTC",
+    createdAt: query.createdAt,
+  });
+  // console.log(botsBTC);
   const _botsBTC = await assignProfit(botsBTC);
   let botsProfitBTC = _botsBTC.reduce(calculateTotalProfit, 0);
   let totalProfitBTC = botsProfitBTC + leverageProfitBTC;
@@ -149,6 +176,8 @@ const returnUserData = async (user) => {
 };
 
 const exportBotData = asyncHandlerMiddleware(async (req, res) => {
+  const { startDate, endDate, id } = req.params;
+  console.log(req.params);
   try {
     const d = new Date();
     const data = [
@@ -182,17 +211,22 @@ const exportBotData = asyncHandlerMiddleware(async (req, res) => {
         "Total Positions Leverage",
       ],
     ];
-
-    const users = await UserModel.find({ role: "User" }, [
-      "name",
-      "email",
-      "api",
-      "role",
-      "leverage",
-    ]).lean();
+    let users;
+    if (id === "undefined") {
+      users = await UserModel.find({ role: "User" }, [
+        "name",
+        "email",
+        "api",
+        "role",
+        "leverage",
+      ]).lean();
+    } else {
+      users = await UserModel.find({ _id: id });
+      // console.log(users);
+    }
 
     for (let i = 0; i < users.length; i++) {
-      const result = await returnUserData(users[i]);
+      const result = await returnUserData(users[i], startDate, endDate);
       data.push(result);
     }
     data.push([
@@ -225,7 +259,7 @@ const exportBotData = asyncHandlerMiddleware(async (req, res) => {
     let totalEthPositionsQtfLeverage = 0;
     let totalPositions = 0;
     for (let i = 3; i < data.length - 1; i++) {
-      console.log(data[i]);
+      // console.log(data[i]);
       totalUsers += 1;
       totalInvestment += data[i][3];
       totalProfit += data[i][4];

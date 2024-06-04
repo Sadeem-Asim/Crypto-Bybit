@@ -12,7 +12,7 @@ export default async function createProfitForLeverage(user_id, coin, pnl) {
     const profit = await Profit.create({
       user: user_id,
       bot: userBot.id,
-      exchange: "BINANCE",
+      exchange: "BYBIT",
       risk: "LOW",
       coin: coin,
       value: pnl,

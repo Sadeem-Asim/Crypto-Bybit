@@ -30,23 +30,14 @@ const taapiSchema = new mongoose.Schema({
 const validation = (data) => {
   const schema = Joi.object({
     exchange: Joi.string().valid().required(),
-    symbol: Joi.string()
-      .when("exchange", {
-        is: "kucoin",
-        then: Joi.string()
-          .valid(...TAAPI_SYMBOLS)
-          .required(),
-        // then: Joi.string().valid(...KUCOIN_SYMBOLS).required()
-      })
-      .when("exchange", {
-        is: "binance",
-        then: Joi.string()
-          .valid(...TAAPI_SYMBOLS)
-          .required(),
-      }),
-    interval: Joi.string()
-    .when("exchange", {
-      is: "binance",
+    symbol: Joi.string().when("exchange", {
+      is: "bybit",
+      then: Joi.string()
+        .valid(...TAAPI_SYMBOLS)
+        .required(),
+    }),
+    interval: Joi.string().when("exchange", {
+      is: "bybit",
       then: Joi.string()
         .valid(...BINANCE_INTERVAL)
         .required(),
